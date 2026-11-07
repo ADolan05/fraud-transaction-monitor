@@ -1,0 +1,31 @@
+<header class="topbar">
+  <h1>Fraud Transaction Monitor</h1>
+  <span class="tag">Synthetic data only</span>
+</header>
+
+<main class="content">
+  <section class="card">
+    <div class="card-head">
+      <h2>System status</h2>
+      <button type="button" (click)="refresh()" [disabled]="loading()">Refresh</button>
+    </div>
+
+    @if (loading()) {
+      <p class="muted">Checking…</p>
+    } @else if (error()) {
+      <p class="status bad">{{ error() }}</p>
+    } @else if (health(); as h) {
+      <p class="status" [class.ok]="h.database" [class.bad]="!h.database">
+        API {{ h.status }} · Database {{ h.database ? 'connected' : 'unreachable' }}
+      </p>
+      <dl class="counts">
+        <div><dt>Customers</dt><dd>{{ h.customers }}</dd></div>
+        <div><dt>Accounts</dt><dd>{{ h.accounts }}</dd></div>
+        <div><dt>Merchants</dt><dd>{{ h.merchants }}</dd></div>
+        <div><dt>Transactions</dt><dd>{{ h.transactions }}</dd></div>
+      </dl>
+    }
+  </section>
+</main>
+
+<router-outlet />

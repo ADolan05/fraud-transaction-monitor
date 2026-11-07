@@ -1,0 +1,55 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f4f6f8;
+  color: #1f2933;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #0b3d2e;
+  color: #fff;
+
+  h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+}
+
+.tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.content { padding: 24px; max-width: 720px; margin: 0 auto; }
+
+.card {
+  background: #fff;
+  border: 1px solid #dde3e8;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  h2 { margin: 0; font-size: 1.1rem; }
+}
+
+.status { font-weight: 600; &.ok { color: #18794e; } &.bad { color: #c62828; } }
+.muted { color: #6b7785; }
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+
+  div { padding: 12px; border: 1px solid #eef1f4; border-radius: 6px; }
+  dt { font-size: 0.8rem; color: #6b7785; }
+  dd { margin: 4px 0 0; font-size: 1.5rem; font-weight: 600; }
+}

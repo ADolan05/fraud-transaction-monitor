@@ -1,0 +1,41 @@
+# Starts the whole stack:  docker compose up --build
+#   Web (Angular via nginx): http://localhost:4200
+#   API + Swagger:           http://localhost:5000/swagger
+#   PostgreSQL:              localhost:5432
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fraudmonitor
+      POSTGRES_USER: fraud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fraud_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraud -d fraudmonitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=fraudmonitor;Username=fraud;Password=${POSTGRES_PASSWORD:-fraud_dev_password}"
+    ports:
+      - "5000:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
