@@ -9,6 +9,7 @@ export interface HealthResponse {
   accounts: number;
   merchants: number;
   transactions: number;
+  alerts: number;
 }
 
 @Injectable({ providedIn: 'root' })

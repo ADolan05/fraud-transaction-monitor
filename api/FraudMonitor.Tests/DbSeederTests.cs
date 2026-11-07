@@ -79,6 +79,40 @@ public class DbSeederTests
     }
 
     [Fact]
+    public async Task Seed_GivesEveryAccountAClearedDaytimeBaseline()
+    {
+        await using var db = NewContext();
+        await DbSeeder.SeedAsync(db);
+
+        var now = DateTime.UtcNow;
+        var byAccount = await db.Transactions.GroupBy(t => t.AccountId).Select(g => g.Count()).ToListAsync();
+        var transactions = await db.Transactions.ToListAsync();
+
+        Assert.Equal(await db.Accounts.CountAsync(), byAccount.Count);
+        Assert.All(byAccount, n => Assert.InRange(n, DbSeeder.MinHistoryPerAccount, DbSeeder.MaxHistoryPerAccount));
+        Assert.All(transactions, t =>
+        {
+            Assert.Equal(TransactionStatus.Cleared, t.Status);
+            Assert.InRange(t.Timestamp, now - DbSeeder.HistoryWindow - TimeSpan.FromDays(1), now);
+            Assert.False(Api.Fraud.Rules.OddHourRule.IsOddHour(Api.Fraud.Geo.LocalTime(t.Timestamp, t.Longitude)));
+            Assert.True(t.Amount >= 2m, "Seeded history must not look like card testing.");
+        });
+    }
+
+    [Fact]
+    public async Task Seed_AddsHistoryToADatabaseSeededBeforeHistoryExisted()
+    {
+        await using var db = NewContext();
+        await DbSeeder.SeedAsync(db);
+        db.Transactions.RemoveRange(db.Transactions);
+        await db.SaveChangesAsync();
+
+        Assert.True(await DbSeeder.SeedAsync(db));
+        Assert.True(await db.Transactions.AnyAsync());
+        Assert.Equal(DbSeeder.DefaultCustomerCount, await db.Customers.CountAsync());
+    }
+
+    [Fact]
     public async Task Seed_IncludesMerchantsInRiskyCategoriesAndDistantCities()
     {
         await using var db = NewContext();

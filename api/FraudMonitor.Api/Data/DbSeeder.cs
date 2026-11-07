@@ -1,5 +1,7 @@
 using Bogus;
+using FraudMonitor.Api.Fraud.Rules;
 using FraudMonitor.Api.Models;
+using FraudMonitor.Api.Simulation;
 using Microsoft.EntityFrameworkCore;
 
 namespace FraudMonitor.Api.Data;
@@ -30,24 +32,94 @@ public static class DbSeeder
         (MerchantCategory.WireService, 0.03f, "Money Transfer"),
     ];
 
-    /// <returns>True if data was inserted, false if the database already had customers.</returns>
+    /// <summary>Each account gets this many past transactions, so the rules have a baseline to compare against.</summary>
+    public const int MinHistoryPerAccount = 25;
+    public const int MaxHistoryPerAccount = 45;
+    public static readonly TimeSpan HistoryWindow = TimeSpan.FromDays(30);
+
+    /// <returns>True if any data was inserted.</returns>
     public static async Task<bool> SeedAsync(
         FraudDbContext db,
         int customerCount = DefaultCustomerCount,
         int merchantCount = DefaultMerchantCount,
         CancellationToken ct = default)
     {
-        if (await db.Customers.AnyAsync(ct))
-            return false;
-
         var faker = new Faker("en_US") { Random = new Randomizer(Seed) };
         var now = DateTime.UtcNow;
+        var seeded = false;
 
-        db.Customers.AddRange(Enumerable.Range(0, customerCount).Select(_ => CreateCustomer(faker, now)));
-        db.Merchants.AddRange(Enumerable.Range(0, merchantCount).Select(_ => CreateMerchant(faker)));
+        if (!await db.Customers.AnyAsync(ct))
+        {
+            db.Customers.AddRange(Enumerable.Range(0, customerCount).Select(_ => CreateCustomer(faker, now)));
+            db.Merchants.AddRange(Enumerable.Range(0, merchantCount).Select(_ => CreateMerchant(faker)));
+            await db.SaveChangesAsync(ct);
+            seeded = true;
+        }
+
+        // Checked separately so databases seeded before history existed get it too.
+        if (!await db.Transactions.AnyAsync(ct))
+        {
+            await SeedHistoryAsync(db, faker, now, ct);
+            seeded = true;
+        }
+
+        return seeded;
+    }
+
+    /// <summary>
+    /// 30 days of ordinary spending per account: daytime, home city or online, everyday categories.
+    /// Saved as already Cleared; this is the "normal" the rules measure new transactions against.
+    /// </summary>
+    private static async Task SeedHistoryAsync(FraudDbContext db, Faker f, DateTime now, CancellationToken ct)
+    {
+        var accounts = await db.Accounts
+            .Select(a => new { a.Id, a.OpenedAt, a.Customer!.HomeCity })
+            .ToListAsync(ct);
+        var merchants = await db.Merchants.ToListAsync(ct);
+        if (accounts.Count == 0 || merchants.Count == 0)
+            return;
+
+        var cities = UsCities.Home.ToDictionary(c => c.Name);
+        var everyday = merchants.Where(m => SpendingProfile.Everyday.Contains(m.Category)).ToList();
+        var online = merchants.Where(m => SpendingProfile.Online.Contains(m.Category) && !RiskyCategoryRule.IsRisky(m.Category)).ToList();
+        var random = new Random(Seed);
+
+        foreach (var account in accounts)
+        {
+            if (!cities.TryGetValue(account.HomeCity, out var home))
+                continue;
+
+            var local = everyday.Where(m => m.City == home.Name).ToList();
+            var count = f.Random.Int(MinHistoryPerAccount, MaxHistoryPerAccount);
+
+            for (var i = 0; i < count; i++)
+            {
+                // Between 8 a.m. and 10 p.m. Eastern (UTC-5), on a random day in the last 30 days.
+                var day = now.Date.AddDays(-f.Random.Int(2, (int)HistoryWindow.TotalDays));
+                var timestamp = DateTime.SpecifyKind(
+                    day.AddHours(13).AddMinutes(f.Random.Int(0, 14 * 60 - 1)).AddSeconds(f.Random.Int(0, 59)),
+                    DateTimeKind.Utc);
+
+                var inStore = local.Count > 0 && f.Random.Bool(0.8f);
+                var merchant = inStore ? f.PickRandom(local) : f.PickRandom(online.Count > 0 ? online : everyday);
+
+                db.Transactions.Add(new Transaction
+                {
+                    AccountId = account.Id,
+                    MerchantId = merchant.Id,
+                    Amount = SpendingProfile.Amount(merchant.Category, random),
+                    Currency = "USD",
+                    Timestamp = timestamp,
+                    Channel = inStore ? TransactionChannel.InStore : TransactionChannel.Online,
+                    Latitude = inStore ? merchant.Latitude : home.Latitude,
+                    Longitude = inStore ? merchant.Longitude : home.Longitude,
+                    RiskScore = 0,
+                    Status = TransactionStatus.Cleared,
+                });
+            }
+        }
 
         await db.SaveChangesAsync(ct);
-        return true;
     }
 
     private static Customer CreateCustomer(Faker f, DateTime now)

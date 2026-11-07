@@ -21,7 +21,7 @@ describe('App', () => {
     fixture.detectChanges();
 
     http.expectOne('/api/health').flush({
-      status: 'Healthy', database: true, customers: 50, accounts: 98, merchants: 200, transactions: 0,
+      status: 'Healthy', database: true, customers: 50, accounts: 98, merchants: 200, transactions: 3500, alerts: 7,
     });
     fixture.detectChanges();
 

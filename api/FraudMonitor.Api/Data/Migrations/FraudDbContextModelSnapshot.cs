@@ -57,6 +57,61 @@ namespace FraudMonitor.Api.Data.Migrations
                     b.ToTable("Accounts");
                 });
 
+            modelBuilder.Entity("FraudMonitor.Api.Models.Alert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<long>("TransactionId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("Alerts");
+                });
+
+            modelBuilder.Entity("FraudMonitor.Api.Models.AlertReason", b =>
+                {
+                    b.Property<int>("AlertId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.HasKey("AlertId", "RuleId");
+
+                    b.HasIndex("RuleId");
+
+                    b.ToTable("AlertReasons");
+                });
+
             modelBuilder.Entity("FraudMonitor.Api.Models.Customer", b =>
                 {
                     b.Property<int>("Id")
@@ -129,6 +184,109 @@ namespace FraudMonitor.Api.Data.Migrations
                     b.ToTable("Merchants");
                 });
 
+            modelBuilder.Entity("FraudMonitor.Api.Models.Rule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<decimal>("Threshold")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("Weight")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Rules");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "LARGE_AMOUNT",
+                            Description = "Amount is more than [threshold] times the account's 30-day average (needs at least 5 past transactions).",
+                            IsEnabled = true,
+                            Name = "Large amount",
+                            Threshold = 5m,
+                            Weight = 30
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "VELOCITY",
+                            Description = "[threshold] or more transactions on one account within 5 minutes.",
+                            IsEnabled = true,
+                            Name = "Velocity",
+                            Threshold = 3m,
+                            Weight = 35
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "IMPOSSIBLE_TRAVEL",
+                            Description = "Two transactions at least 100 miles apart within 24 hours that would need travel faster than [threshold] mph.",
+                            IsEnabled = true,
+                            Name = "Impossible travel",
+                            Threshold = 500m,
+                            Weight = 45
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "ODD_HOUR",
+                            Description = "Transaction between 1 and 5 a.m. local time, for an account where less than [threshold] (a fraction) of the last 30 days' transactions happened then.",
+                            IsEnabled = true,
+                            Name = "Odd hour",
+                            Threshold = 0.10m,
+                            Weight = 15
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "RISKY_CATEGORY",
+                            Description = "Gift card, crypto exchange or wire service purchase above $[threshold].",
+                            IsEnabled = true,
+                            Name = "Risky category",
+                            Threshold = 500m,
+                            Weight = 20
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Code = "CARD_TESTING",
+                            Description = "[threshold] or more charges under $2 in the past hour, followed by a charge of $100 or more.",
+                            IsEnabled = true,
+                            Name = "Card testing",
+                            Threshold = 3m,
+                            Weight = 40
+                        });
+                });
+
             modelBuilder.Entity("FraudMonitor.Api.Models.Transaction", b =>
                 {
                     b.Property<long>("Id")
@@ -195,6 +353,36 @@ namespace FraudMonitor.Api.Data.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("FraudMonitor.Api.Models.Alert", b =>
+                {
+                    b.HasOne("FraudMonitor.Api.Models.Transaction", "Transaction")
+                        .WithOne("Alert")
+                        .HasForeignKey("FraudMonitor.Api.Models.Alert", "TransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Transaction");
+                });
+
+            modelBuilder.Entity("FraudMonitor.Api.Models.AlertReason", b =>
+                {
+                    b.HasOne("FraudMonitor.Api.Models.Alert", "Alert")
+                        .WithMany("Reasons")
+                        .HasForeignKey("AlertId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FraudMonitor.Api.Models.Rule", "Rule")
+                        .WithMany()
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Alert");
+
+                    b.Navigation("Rule");
+                });
+
             modelBuilder.Entity("FraudMonitor.Api.Models.Transaction", b =>
                 {
                     b.HasOne("FraudMonitor.Api.Models.Account", "Account")
@@ -219,9 +407,19 @@ namespace FraudMonitor.Api.Data.Migrations
                     b.Navigation("Transactions");
                 });
 
+            modelBuilder.Entity("FraudMonitor.Api.Models.Alert", b =>
+                {
+                    b.Navigation("Reasons");
+                });
+
             modelBuilder.Entity("FraudMonitor.Api.Models.Customer", b =>
                 {
                     b.Navigation("Accounts");
+                });
+
+            modelBuilder.Entity("FraudMonitor.Api.Models.Transaction", b =>
+                {
+                    b.Navigation("Alert");
                 });
 #pragma warning restore 612, 618
         }

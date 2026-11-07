@@ -39,4 +39,7 @@ public class Transaction
     /// <summary>0–100, filled in by the rules engine.</summary>
     public int RiskScore { get; set; }
     public TransactionStatus Status { get; set; } = TransactionStatus.Pending;
+
+    /// <summary>Set only when the transaction was flagged.</summary>
+    public Alert? Alert { get; set; }
 }

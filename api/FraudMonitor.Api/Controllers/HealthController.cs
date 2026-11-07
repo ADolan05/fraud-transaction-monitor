@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FraudMonitor.Api.Controllers;
 
-public record HealthResponse(string Status, bool Database, int Customers, int Accounts, int Merchants, long Transactions);
+public record HealthResponse(string Status, bool Database, int Customers, int Accounts, int Merchants, long Transactions, int Alerts);
 
 /// <summary>Lets the front end (and Docker) confirm the API and database are up.</summary>
 [ApiController]
@@ -17,7 +17,7 @@ public class HealthController(FraudDbContext db) : ControllerBase
     public async Task<ActionResult<HealthResponse>> Get(CancellationToken ct)
     {
         if (!await db.Database.CanConnectAsync(ct))
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new HealthResponse("Unhealthy", false, 0, 0, 0, 0));
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new HealthResponse("Unhealthy", false, 0, 0, 0, 0, 0));
 
         return Ok(new HealthResponse(
             "Healthy",
@@ -25,6 +25,7 @@ public class HealthController(FraudDbContext db) : ControllerBase
             await db.Customers.CountAsync(ct),
             await db.Accounts.CountAsync(ct),
             await db.Merchants.CountAsync(ct),
-            await db.Transactions.LongCountAsync(ct)));
+            await db.Transactions.LongCountAsync(ct),
+            await db.Alerts.CountAsync(ct)));
     }
 }

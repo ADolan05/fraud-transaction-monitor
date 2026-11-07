@@ -1,3 +1,4 @@
+using FraudMonitor.Api.Fraud;
 using FraudMonitor.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,9 @@ public class FraudDbContext(DbContextOptions<FraudDbContext> options) : DbContex
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Merchant> Merchants => Set<Merchant>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<Rule> Rules => Set<Rule>();
+    public DbSet<Alert> Alerts => Set<Alert>();
+    public DbSet<AlertReason> AlertReasons => Set<AlertReason>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,6 +59,42 @@ public class FraudDbContext(DbContextOptions<FraudDbContext> options) : DbContex
             e.HasOne(t => t.Merchant)
                 .WithMany()
                 .HasForeignKey(t => t.MerchantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Rule>(e =>
+        {
+            e.Property(r => r.Code).HasMaxLength(40);
+            e.HasIndex(r => r.Code).IsUnique();
+            e.Property(r => r.Name).HasMaxLength(80);
+            e.Property(r => r.Description).HasMaxLength(300);
+            e.Property(r => r.Threshold).HasPrecision(10, 2);
+            e.HasData(DefaultRules.All);
+        });
+
+        modelBuilder.Entity<Alert>(e =>
+        {
+            e.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            // One alert per flagged transaction.
+            e.HasOne(a => a.Transaction)
+                .WithOne(t => t.Alert)
+                .HasForeignKey<Alert>(a => a.TransactionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // The alert queue filters by status and sorts by age.
+            e.HasIndex(a => new { a.Status, a.CreatedAt });
+        });
+
+        modelBuilder.Entity<AlertReason>(e =>
+        {
+            e.HasKey(r => new { r.AlertId, r.RuleId });
+            e.Property(r => r.Detail).HasMaxLength(300);
+            e.HasOne(r => r.Alert)
+                .WithMany(a => a.Reasons)
+                .HasForeignKey(r => r.AlertId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Rule)
+                .WithMany()
+                .HasForeignKey(r => r.RuleId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
